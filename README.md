@@ -107,3 +107,7 @@ Everything is in `~/Library/Application Support/Chronos/chronos.sqlite`. Delete 
 | `make clean` | Deletes everything the build made |
 
 How Chronos works inside, and why, is in [DESIGN.md](DESIGN.md).
+
+## License
+
+Chronos is released under the [MIT License](LICENSE).
