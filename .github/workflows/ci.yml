@@ -1,0 +1,56 @@
+# Lints and tests every push and pull request. When everything passes, builds Chronos.app and the Firefox extension
+# and keeps them as a downloadable artifact for two days.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch or pull request cancels the run still going for the older one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Package.swift needs Swift 6.2, which ships with Xcode 26.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          node --version
+
+      - name: Lint
+        run: make lint
+
+      - name: Test
+        run: make test
+
+      # No signing identity on the runner, so the Makefile signs ad hoc.
+      - name: Build
+        run: make all
+
+      # upload-artifact drops file permissions and symlinks, which breaks an app bundle, so it's zipped with ditto
+      # first.
+      - name: Package
+        run: |
+          mkdir -p build/artifact
+          ditto -c -k --keepParent build/Chronos.app "build/artifact/Chronos-$(cat VERSION).zip"
+          cp build/chronos-ff.xpi "build/artifact/chronos-ff-$(cat VERSION).xpi"
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: chronos
+          path: build/artifact/
+          retention-days: 2
+          if-no-files-found: error
