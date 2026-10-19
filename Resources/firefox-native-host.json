@@ -1,0 +1,7 @@
+{
+  "name": "com.kingbuzzman.chronos",
+  "description": "Chronos: relays the domain of Firefox's tab in front to the Chronos recorder",
+  "path": "HELPER_PATH",
+  "type": "stdio",
+  "allowed_extensions": ["chronos-ff@kingbuzzman"]
+}

@@ -1,0 +1,16 @@
+{
+  "manifest_version": 2,
+  "name": "Chronos",
+  "version": "0.1.0",
+  "description": "Tells Chronos, the Mac time tracker, which site you're on: the domain only, never the address.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "chronos-ff@kingbuzzman",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": ["tabs", "nativeMessaging"],
+  "background": {
+    "scripts": ["domain.js", "background.js"]
+  }
+}
