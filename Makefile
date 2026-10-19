@@ -84,7 +84,7 @@ run: $(APP)
 test:
 	$(STRICT) swift build $(SWIFTPM) --build-tests
 	$(UNBUFFERED) swift test $(SWIFTPM) --skip-build $(if $(TESTS),--filter '$(TESTS)') </dev/null
-	node --test $(FF)/
+	node --test $(FF)/*.test.js
 
 format:
 	swift format --recursive --in-place Package.swift Sources Tests

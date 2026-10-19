@@ -1,4 +1,4 @@
-// node --test chronos-ff/
+// node --test chronos-ff/*.test.js
 const assert = require("node:assert");
 const test = require("node:test");
 const { domainOf } = require("./domain.js");
