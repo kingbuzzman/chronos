@@ -1,0 +1,91 @@
+name: release
+
+# Publishes a GitHub release when VERSION on master names a version that has no tag yet. It never runs on its own: the CI
+# workflow runs it as its last job, only after its tests pass on a push to master, and it publishes the app and Firefox
+# extension that run built and tested: it creates the v<VERSION> tag on that commit and a release with both attached,
+# its notes taken from the version's section of CHANGELOG.md. To release, add that section, bump VERSION and push. To
+# retry, re-run the CI run's failed jobs.
+on:
+  workflow_call:
+
+# None by default; the job below asks for only what it needs.
+permissions: {}
+
+jobs:
+  release:
+    name: release
+    permissions:
+      contents: write # to create the release and its tag
+    # Two runs in a row must not race to create the same release.
+    concurrency:
+      group: release
+      cancel-in-progress: false
+    # Nothing is built here, so any runner will do.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check for a new version
+        id: version
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error file=VERSION::VERSION must look like 1.2.3, not '$version'"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "v$version is already released; nothing to do."
+            echo "is-new=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download the build
+        if: steps.version.outputs.is-new == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: chronos
+          path: build
+
+      - name: Check the build
+        if: steps.version.outputs.is-new == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cd build
+          shasum -a 256 -c Chronos-"$VERSION".zip.sha256 chronos-ff-"$VERSION".xpi.sha256
+          # Built as this version: the recorder and the viewer nested in it each carry it in their Info.plist, and the
+          # extension in its manifest.
+          for plist in Chronos.app/Contents/Info.plist Chronos.app/Contents/Helpers/Chronos.app/Contents/Info.plist; do
+            if ! unzip -p Chronos-"$VERSION".zip "$plist" | grep -A1 CFBundleShortVersionString \
+              | grep -q -F "<string>$VERSION</string>"; then
+              echo "::error::$plist in the app is not built as $VERSION"
+              exit 1
+            fi
+          done
+          if ! unzip -p chronos-ff-"$VERSION".xpi manifest.json | grep -q -F "\"version\": \"$VERSION\""; then
+            echo "::error::the Firefox extension is not built as $VERSION"
+            exit 1
+          fi
+
+      - name: Create the release and tag
+        if: steps.version.outputs.is-new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # The text under "## <VERSION>" in CHANGELOG.md, up to the next version's heading.
+          awk -v heading="## $VERSION" '$0 == heading { found = 1; next } found && /^## / { exit } found' CHANGELOG.md \
+            > "$RUNNER_TEMP/notes.md"
+          if grep -q '[^[:space:]]' "$RUNNER_TEMP/notes.md"; then
+            notes=(--notes-file "$RUNNER_TEMP/notes.md")
+          else
+            echo "::warning file=CHANGELOG.md::no section for $VERSION; using generated notes"
+            notes=(--generate-notes)
+          fi
+          gh release create "v$VERSION" build/Chronos-"$VERSION".zip* build/chronos-ff-"$VERSION".xpi* \
+            --target "$GITHUB_SHA" --title "Chronos $VERSION" "${notes[@]}"

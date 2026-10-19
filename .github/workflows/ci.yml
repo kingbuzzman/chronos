@@ -8,21 +8,42 @@ on:
   pull_request:
   workflow_dispatch:
 
-# A newer push to the same branch or pull request cancels the run still going for the older one.
+# Read-only; nothing here writes to the repository. The release job asks for more.
+permissions:
+  contents: read
+
+# A newer push to the same branch or pull request cancels the run still going for the older one, except on master: a
+# master run that passes may release.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   build:
     # Package.swift needs Swift 6.2, which ships with Xcode 26.
     runs-on: macos-26
+    timeout-minutes: 30
+    outputs:
+      new-version: ${{ steps.version.outputs.new-version }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
+
+      # Only a push to master whose VERSION has no release yet goes on to the release job.
+      - name: Decide whether to release
+        id: version
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        run: |
+          version=$(tr -d '[:space:]' < VERSION)
+          if ! git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+            echo "$version has no release yet; releasing it if this run passes."
+            echo "new-version=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Toolchain
         run: |
@@ -41,16 +62,29 @@ jobs:
         run: make all
 
       # upload-artifact drops file permissions and symlinks, which breaks an app bundle, so it's zipped with ditto
-      # first.
+      # first. Each file gets a checksum, which the release checks and publishes alongside it.
       - name: Package
         run: |
+          version=$(tr -d '[:space:]' < VERSION)
           mkdir -p build/artifact
-          ditto -c -k --keepParent build/Chronos.app "build/artifact/Chronos-$(cat VERSION).zip"
-          cp build/chronos-ff.xpi "build/artifact/chronos-ff-$(cat VERSION).xpi"
+          ditto -c -k --keepParent build/Chronos.app "build/artifact/Chronos-$version.zip"
+          cp build/chronos-ff.xpi "build/artifact/chronos-ff-$version.xpi"
+          cd build/artifact
+          for file in "Chronos-$version.zip" "chronos-ff-$version.xpi"; do
+            shasum -a 256 "$file" > "$file.sha256"
+          done
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: chronos
           path: build/artifact/
           retention-days: 2
           if-no-files-found: error
+
+  # Starts only once the build above passes, and only for a version with no release yet.
+  release:
+    needs: build
+    if: needs.build.outputs.new-version == 'true'
+    permissions:
+      contents: write # to create the release and its tag
+    uses: $/.github/workflows/release.yml
