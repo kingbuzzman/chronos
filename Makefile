@@ -91,6 +91,7 @@ format:
 
 lint:
 	swift format lint --recursive --strict Package.swift Sources Tests
+	npx web-ext lint --source-dir=chronos-ff --warnings-as-errors
 
 install: $(APP) $(FF_XPI)
 	mkdir -p $(PREFIX)
