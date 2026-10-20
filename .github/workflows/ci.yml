@@ -12,11 +12,11 @@ on:
 permissions:
   contents: read
 
-# A newer push to the same branch or pull request cancels the run still going for the older one, except on master: a
-# master run that passes may release.
+# A newer push cancels the run still going for the older one. The release workflow has its own
+# concurrency with cancel-in-progress: false, so once release starts it won't be interrupted.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+  cancel-in-progress: true
 
 jobs:
   build:
