@@ -61,6 +61,20 @@ jobs:
       - name: Build
         run: make all
 
+      - name: Sign Firefox extension
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          if [[ -z "$WEB_EXT_API_KEY" ]]; then
+            echo "::warning::AMO_JWT_ISSUER secret not set; skipping Firefox extension signing"
+            exit 0
+          fi
+          npx web-ext sign --source-dir=chronos-ff --artifacts-dir=build/signed --channel=unlisted
+          # web-ext outputs as chronos_ff-<version>.xpi; replace the unsigned build
+          mv build/signed/*.xpi build/chronos-ff.xpi
+
       # upload-artifact drops file permissions and symlinks, which breaks an app bundle, so it's zipped with ditto
       # first. Each file gets a checksum, which the release checks and publishes alongside it.
       - name: Package
