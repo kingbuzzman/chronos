@@ -70,7 +70,7 @@ jobs:
           npx web-ext sign --source-dir=build/ff-source --artifacts-dir=build/signed --channel=unlisted
           # Signed xpi gets the clean name (no -unsigned suffix)
           mv build/signed/*.xpi "build/chronos-ff-$VERSION.xpi"
-          shasum -a 256 "build/chronos-ff-$VERSION.xpi" > "build/chronos-ff-$VERSION.xpi.sha256"
+          cd build && shasum -a 256 "chronos-ff-$VERSION.xpi" > "chronos-ff-$VERSION.xpi.sha256"
 
       - name: Check the build
         env:
