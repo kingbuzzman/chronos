@@ -7,6 +7,11 @@ name: release
 # retry, re-run the CI run's failed jobs.
 on:
   workflow_call:
+    secrets:
+      AMO_JWT_ISSUER:
+        required: true
+      AMO_JWT_SECRET:
+        required: true
 
 # None by default; the job below asks for only what it needs.
 permissions: {}
@@ -22,7 +27,7 @@ jobs:
       cancel-in-progress: false
     # Nothing is built here, so any runner will do.
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -44,12 +49,33 @@ jobs:
             echo "is-new=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.version.outputs.is-new == 'true'
+        with:
+          node-version: 22
+
       - name: Download the build
         if: steps.version.outputs.is-new == 'true'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: chronos
           path: build
+
+      - name: Sign Firefox extension
+        if: steps.version.outputs.is-new == 'true'
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # Extract the unsigned xpi (which has the correct version injected by the Makefile)
+          mkdir -p build/ff-source
+          unzip -q "build/chronos-ff-$VERSION-unsigned.xpi" -d build/ff-source
+          # Sign from the extracted source
+          npx web-ext sign --source-dir=build/ff-source --artifacts-dir=build/signed --channel=unlisted
+          # Signed xpi gets the clean name (no -unsigned suffix)
+          mv build/signed/*.xpi "build/chronos-ff-$VERSION.xpi"
+          shasum -a 256 "build/chronos-ff-$VERSION.xpi" > "build/chronos-ff-$VERSION.xpi.sha256"
 
       - name: Check the build
         if: steps.version.outputs.is-new == 'true'

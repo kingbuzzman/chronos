@@ -61,20 +61,6 @@ jobs:
       - name: Build
         run: make all
 
-      - name: Sign Firefox extension
-        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
-        env:
-          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
-          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-        run: |
-          if [[ -z "$WEB_EXT_API_KEY" ]]; then
-            echo "::warning::AMO_JWT_ISSUER secret not set; skipping Firefox extension signing"
-            exit 0
-          fi
-          npx web-ext sign --source-dir=chronos-ff --artifacts-dir=build/signed --channel=unlisted
-          # web-ext outputs as chronos_ff-<version>.xpi; replace the unsigned build
-          mv build/signed/*.xpi build/chronos-ff.xpi
-
       # upload-artifact drops file permissions and symlinks, which breaks an app bundle, so it's zipped with ditto
       # first. Each file gets a checksum, which the release checks and publishes alongside it.
       - name: Package
@@ -82,9 +68,9 @@ jobs:
           version=$(tr -d '[:space:]' < VERSION)
           mkdir -p build/artifact
           ditto -c -k --keepParent build/Chronos.app "build/artifact/Chronos-$version.zip"
-          cp build/chronos-ff.xpi "build/artifact/chronos-ff-$version.xpi"
+          cp build/chronos-ff-unsigned.xpi "build/artifact/chronos-ff-$version-unsigned.xpi"
           cd build/artifact
-          for file in "Chronos-$version.zip" "chronos-ff-$version.xpi"; do
+          for file in "Chronos-$version.zip" "chronos-ff-$version-unsigned.xpi"; do
             shasum -a 256 "$file" > "$file.sha256"
           done
 
@@ -101,4 +87,7 @@ jobs:
     if: needs.build.outputs.new-version == 'true'
     permissions:
       contents: write # to create the release and its tag
+    secrets:
+      AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+      AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
     uses: $/.github/workflows/release.yml
