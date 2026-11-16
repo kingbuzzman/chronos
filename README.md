@@ -43,7 +43,7 @@ out plainly: what took the most time, and how much.
 ### What you need
 
 - A Mac running macOS 14 (Sonoma) or later.
-- To build it yourself: Xcode 26 or later, Node.js to run the Firefox extension's tests, and a code-signing
+- To build it yourself: Xcode 27 or later, Node.js to run the Firefox extension's tests, and a code-signing
   certificate you create once (see [Signing](#signing)).
 
 ### Get Chronos
