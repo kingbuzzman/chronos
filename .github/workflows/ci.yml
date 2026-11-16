@@ -20,8 +20,10 @@ concurrency:
 
 jobs:
   build:
-    # Package.swift needs Swift 6.2, which ships with Xcode 26.
-    runs-on: macos-26
+    # The image with the newest Xcode, so CI builds with the compiler and SDK a Mac kept up to date does: warnings fail
+    # the build, and a newer compiler warns about things an older one doesn't, and the other way around. A preview image
+    # for now; the app still runs on macOS 14.
+    runs-on: xcode-27
     timeout-minutes: 30
     outputs:
       new-version: ${{ steps.version.outputs.new-version }}
@@ -44,6 +46,12 @@ jobs:
             echo "$version has no release yet; releasing it if this run passes."
             echo "new-version=true" >> "$GITHUB_OUTPUT"
           fi
+
+      # The newest released Xcode on the image, not its default, which lags behind; betas are left out.
+      - name: Use the newest Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | grep -E '/Xcode_[0-9]+\.[0-9]+\.[0-9]+\.app$' | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
 
       - name: Toolchain
         run: |
