@@ -11,19 +11,11 @@ import Foundation
         case chromium, safari, terminal
     }
 
-    private static let kinds: [String: Kind] = [
-        "com.google.Chrome": .chromium,
-        "com.google.Chrome.beta": .chromium,
-        "com.google.Chrome.dev": .chromium,
-        "com.google.Chrome.canary": .chromium,
-        "com.brave.Browser": .chromium,
-        "com.microsoft.edgemac": .chromium,
-        "com.vivaldi.Vivaldi": .chromium,
-        "company.thebrowser.Browser": .chromium,
-        "com.apple.Safari": .safari,
-        "com.apple.SafariTechnologyPreview": .safari,
-        "com.apple.Terminal": .terminal,
-    ]
+    private static let kinds: [String: Kind] =
+        Dictionary(
+            uniqueKeysWithValues: Browsers.chromium.map { ($0, Kind.chromium) } + Browsers.safari.map { ($0, .safari) }
+        )
+        .merging(["com.apple.Terminal": .terminal]) { $1 }
 
     /// AppleScript's error when the user said no to Automation for that app.
     private static let notPermitted = -1743

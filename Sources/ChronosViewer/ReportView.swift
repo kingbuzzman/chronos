@@ -383,7 +383,7 @@ private struct TimeRow<Icon: View>: View {
 }
 
 /// Apps' own icons, looked up once each.
-@MainActor private enum AppIcons {
+@MainActor enum AppIcons {
     private static var cache: [String: NSImage] = [:]
 
     static func icon(for bundleID: String) -> NSImage {
@@ -408,7 +408,7 @@ extension AppTotal.Part.Kind {
 }
 
 extension Period {
-    fileprivate var phrase: String {
+    var phrase: String {
         switch self {
         case .day: "today"
         case .week: "this week"

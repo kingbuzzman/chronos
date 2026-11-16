@@ -12,6 +12,11 @@ package enum ViewerChannel {
     package static let settingsArgument = "--settings"
 }
 
+/// Viewer → recorder: the schedule was saved, so the recorder looks at its allowances again.
+package enum ScheduleChannel {
+    package static let saved = Notification.Name("com.kingbuzzman.chronos.schedule.saved")
+}
+
 package enum Paths {
     /// `~/Library/Application Support/Chronos`.
     package static var folder: String {
@@ -25,8 +30,8 @@ package enum Paths {
         return folder + "/chronos.sqlite"
     }
 
-    /// The viewer's `Schedule`, next to the database, so trying things out against another database doesn't touch the
-    /// real labels either. The recorder never reads it.
+    /// The `Schedule`, next to the database, so trying things out against another database doesn't touch the real
+    /// labels either. The viewer writes it; the recorder only reads its allowances.
     package static var schedule: String {
         URL(fileURLWithPath: database).deletingLastPathComponent().appendingPathComponent("schedule.json").path
     }

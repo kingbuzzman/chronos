@@ -1,13 +1,26 @@
 package import Foundation
 
-/// Named parts of the week, such as Work from 9 to 5 on weekdays, for splitting reports. A schedule only changes how
-/// time is shown: the recorder never reads it, and nothing in the database refers to it. Time outside every label is
-/// unscheduled.
+/// Named parts of the week, such as Work from 9 to 5 on weekdays, for splitting reports, and the allowances, which can
+/// count only during one of them. Time outside every label is unscheduled. Nothing in the database refers to a
+/// schedule: it changes how time is shown, and when to say an allowance is used up, never what's recorded.
 package struct Schedule: Codable, Equatable, Sendable {
     package var labels: [Label]
+    package var allowances: [Allowance]
 
-    package init(labels: [Label] = []) {
+    package init(labels: [Label] = [], allowances: [Allowance] = []) {
         self.labels = labels
+        self.allowances = allowances
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case labels, allowances
+    }
+
+    /// Schedules saved before allowances existed have none.
+    package init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        labels = try container.decode([Label].self, forKey: .labels)
+        allowances = try container.decodeIfPresent([Allowance].self, forKey: .allowances) ?? []
     }
 
     /// Minutes in a day, and in a week.

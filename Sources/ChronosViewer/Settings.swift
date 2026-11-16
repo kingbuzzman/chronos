@@ -4,8 +4,8 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// The schedule as saved, which reports use, and as being edited in Settings, which is saved as soon as no two
-/// labels overlap. Until then the report keeps using the last saved one.
+/// The schedule as saved, which reports and the recorder's allowances use, and as being edited in Settings, which is
+/// saved as soon as no two labels overlap. Until then both keep using the last saved one.
 @MainActor @Observable final class ScheduleStore {
     var draft: Schedule {
         didSet { save() }
@@ -33,8 +33,20 @@ import SwiftUI
         )
     }
 
+    /// Deletes the label, and the allowances that count only during it: they'd never count again.
     func remove(_ label: Schedule.Label) {
-        draft.labels.removeAll { $0.id == label.id }
+        var schedule = draft
+        schedule.labels.removeAll { $0.id == label.id }
+        schedule.allowances.removeAll { $0.during == .label(label.id) }
+        draft = schedule
+    }
+
+    func addAllowance(for subject: Allowance.Subject) {
+        draft.allowances.append(Allowance(subject: subject, amount: 30, unit: .minutes, per: .day))
+    }
+
+    func remove(_ allowance: Allowance) {
+        draft.allowances.removeAll { $0.id == allowance.id }
     }
 
     private func save() {
@@ -43,6 +55,13 @@ import SwiftUI
             try draft.save(to: Paths.schedule)
             saved = draft
             error = nil
+            // The recorder reads the allowances again.
+            DistributedNotificationCenter.default().postNotificationName(
+                ScheduleChannel.saved,
+                object: nil,
+                userInfo: nil,
+                deliverImmediately: true
+            )
         } catch {
             self.error = "\(error)"
         }
@@ -52,7 +71,7 @@ import SwiftUI
 /// The Settings window, one tab per pane, in the toolbar like other Mac apps' settings.
 @MainActor final class SettingsWindow {
     enum Pane: Int {
-        case schedule, about
+        case schedule, allowances, about
     }
 
     private let window: NSWindow
@@ -62,6 +81,7 @@ import SwiftUI
         tabs.tabStyle = .toolbar
         for (title, symbol, view) in [
             ("Schedule", "calendar", AnyView(ScheduleSettings(store: schedule))),
+            ("Allowances", "hourglass", AnyView(AllowanceSettings(store: schedule))),
             ("About", "info.circle", AnyView(AboutView())),
         ] {
             let content = NSHostingController(rootView: view.frame(width: 560, height: 480))

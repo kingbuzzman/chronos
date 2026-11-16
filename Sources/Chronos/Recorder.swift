@@ -23,6 +23,8 @@ private let log = Logger(subsystem: BundleID.recorder, category: "recorder")
     /// Whether a window or focus change came in since the last refresh, so Terminal's tab may be another one.
     private var tabMayHaveChanged = false
     private var observers: [any NSObjectProtocol] = []
+    /// Called after each write with what the open slot is now for, or nil when none is open.
+    var recorded: ((Target?) -> Void)?
 
     init(store: Store) {
         self.store = store
@@ -184,6 +186,7 @@ private let log = Logger(subsystem: BundleID.recorder, category: "recorder")
         } catch {
             log.error("Writing a slot failed: \(error, privacy: .public)")
         }
+        recorded?(tracker.current)
     }
 
     private func observe(

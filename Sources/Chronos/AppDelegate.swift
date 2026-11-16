@@ -5,6 +5,7 @@ import ChronosCore
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate {
     private var recorder: Recorder?
     private var statusMenu: StatusMenu?
+    private var allowances: AllowanceWatcher?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -22,9 +23,12 @@ import ChronosCore
             _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
 
             let recorder = Recorder(store: store)
+            let allowances = AllowanceWatcher(database: store.database)
+            recorder.recorded = { allowances.focusChanged($0) }
             recorder.start()
             self.recorder = recorder
-            statusMenu = StatusMenu(recorder: recorder)
+            self.allowances = allowances
+            statusMenu = StatusMenu(recorder: recorder, allowances: allowances)
         } catch {
             let alert = NSAlert()
             alert.messageText = "Chronos can't open its database"

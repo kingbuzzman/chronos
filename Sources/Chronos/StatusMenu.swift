@@ -5,11 +5,13 @@ import ChronosCore
 /// The menu bar icon and its menu. The totals are read when the menu opens; nothing updates in the background.
 @MainActor final class StatusMenu: NSObject, NSMenuDelegate {
     private let recorder: Recorder
+    private let allowances: AllowanceWatcher
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
 
-    init(recorder: Recorder) {
+    init(recorder: Recorder, allowances: AllowanceWatcher) {
         self.recorder = recorder
+        self.allowances = allowances
         super.init()
         // A template image: macOS tints it for light and dark menu bars.
         let icon = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
@@ -40,6 +42,11 @@ import ChronosCore
         for app in recorder.details.denied.sorted() {
             menu.addItem(info("⚠︎ Automation not allowed for \(app): only its app time is recorded"))
         }
+        if allowances.hasAllowances, allowances.notificationsDenied {
+            menu.addItem(info("⚠︎ Notifications not allowed: you won't hear when an allowance runs out"))
+        }
+        // Noticed next time, if turned off in System Settings since.
+        allowances.refreshPermission()
         menu.addItem(.separator())
         menu.addItem(action("Open Viewer", #selector(openViewer)))
         menu.addItem(.separator())

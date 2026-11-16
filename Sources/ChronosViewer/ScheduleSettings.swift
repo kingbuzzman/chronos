@@ -90,7 +90,12 @@ private struct LabelEditor: View {
                     Button("Delete Label", systemImage: "trash", action: delete)
                         .labelStyle(.iconOnly)
                         .buttonStyle(.borderless)
-                        .help("Delete \(label.title). Its time becomes Unscheduled; nothing recorded is lost.")
+                        .help(
+                            """
+                            Delete \(label.title), and any allowances that count only during it. Its time becomes \
+                            Unscheduled; nothing recorded is lost.
+                            """
+                        )
                 }
                 ForEach($label.hours) { $hours in
                     HoursEditor(hours: $hours, tint: label.color.color) {
@@ -236,7 +241,7 @@ private struct ColorWell: View {
     }
 }
 
-private struct Notice<Content: View>: View {
+struct Notice<Content: View>: View {
     let symbol: String
     let color: Color
     @ViewBuilder let content: () -> Content

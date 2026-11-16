@@ -32,6 +32,9 @@ out plainly: what took the most time, and how much.
 - **By the hours you keep:** in Settings (in the watch's menu, or ⌘, in the viewer), label parts of your week, like
   Work from 9 to 5 on weekdays. The viewer then splits your time by label, with everything else as Unscheduled, and
   shows one label's apps at a click. Labels apply to everything already recorded, too.
+- **Allowances, not blockers:** give an app, a site or a Terminal program so much time a day, week or month, like
+  reddit.com for 30 minutes a day during Work. Go over and you get a notification. Chronos never closes or blocks
+  anything. Browsers don't get an allowance of their own; their sites do.
 
 ---
 
