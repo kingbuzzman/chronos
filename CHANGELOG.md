@@ -2,6 +2,8 @@
 
 Each release's notes on GitHub come from its section here (see `.github/workflows/release.yml`).
 
+## Unreleased
+
 ## 0.2.0
 
 Settings, for the hours you keep and the time you allow.
