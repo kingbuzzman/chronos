@@ -7,27 +7,75 @@ import SwiftUI
 /// Reads the database read-only. The one change the viewer makes, forgetting a site, goes through a connection opened
 /// for just that.
 @MainActor @Observable final class ReportModel {
+    /// Every app's time, or one label's, or unscheduled time.
+    enum Slice: Hashable {
+        case all
+        /// A label by its ID, or unscheduled time for `nil`.
+        case label(UUID?)
+    }
+
+    let schedule: ScheduleStore
     var period = Period.day
-    private(set) var apps: [AppTotal] = []
-    private(set) var message: String?
+    var slice = Slice.all
+    private var all: [AppTotal] = []
+    /// Each label's apps, and unscheduled time's under `nil`. Empty while there are no labels.
+    private(set) var byLabel: [UUID?: [AppTotal]] = [:]
+    private var failure: String?
+
+    init(schedule: ScheduleStore) {
+        self.schedule = schedule
+    }
+
+    /// The apps in the slice on screen.
+    var apps: [AppTotal] {
+        switch slice {
+        case .all: all
+        case .label(let id): byLabel[id] ?? []
+        }
+    }
 
     var total: Int { apps.reduce(0) { $0 + $1.seconds } }
 
+    func seconds(in label: UUID?) -> Int {
+        byLabel[label]?.reduce(0) { $0 + $1.seconds } ?? 0
+    }
+
+    var message: String? {
+        if let failure { return failure }
+        guard apps.isEmpty else { return nil }
+        guard FileManager.default.fileExists(atPath: Paths.database) else {
+            return "Nothing recorded yet. Chronos records while it's running."
+        }
+        switch slice {
+        case .all: return "Nothing recorded \(period.phrase)."
+        case .label(nil): return "No unscheduled time \(period.phrase)."
+        case .label(let id?):
+            let name = schedule.saved.labels.first { $0.id == id }?.title ?? "this label"
+            return "Nothing recorded during \(name) \(period.phrase)."
+        }
+    }
+
     func load() {
-        let path = Paths.database
-        guard FileManager.default.fileExists(atPath: path) else {
-            apps = []
-            message = "Nothing recorded yet. Chronos records while it's running."
+        let labels = schedule.saved.labels
+        // A label that's been deleted can't stay selected.
+        if case .label(let id?) = slice, !labels.contains(where: { $0.id == id }) { slice = .all }
+        if labels.isEmpty { slice = .all }
+        guard FileManager.default.fileExists(atPath: Paths.database) else {
+            (all, byLabel, failure) = ([], [:], nil)
             return
         }
         do {
-            let database = try Database(path: path, readOnly: true)
+            let database = try Database(path: Paths.database, readOnly: true)
             try Schema.checkReadable(database)
-            apps = try Report.apps(database, in: period, at: Date(), calendar: .autoupdatingCurrent)
-            message = apps.isEmpty ? "Nothing recorded \(period.phrase)." : nil
+            let now = Date()
+            all = try Report.apps(database, in: period, at: now, calendar: .autoupdatingCurrent)
+            byLabel =
+                labels.isEmpty
+                ? [:]
+                : try Report.apps(database, in: period, at: now, by: schedule.saved, calendar: .autoupdatingCurrent)
+            failure = nil
         } catch {
-            apps = []
-            message = "\(error)"
+            (all, byLabel, failure) = ([], [:], "\(error)")
         }
     }
 
@@ -36,7 +84,7 @@ import SwiftUI
         do {
             try Forget.site(site, in: app.bundleID, Database(path: Paths.database))
         } catch {
-            message = "\(error)"
+            failure = "\(error)"
             return
         }
         withAnimation(.easeInOut(duration: 0.15)) { load() }
@@ -59,7 +107,12 @@ struct ReportView: View {
                     .font(.system(size: 30, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .help(formatDurationPrecisely(model.total))
-                Text(model.period.phrase).foregroundStyle(.secondary)
+                    .contentTransition(.numericText())
+                Text(caption).foregroundStyle(.secondary)
+            }
+
+            if !model.schedule.saved.labels.isEmpty {
+                LabelStrip(model: model)
             }
 
             if let message = model.message {
@@ -74,11 +127,138 @@ struct ReportView: View {
                         }
                     }
                 }
+                // The bars take the color of the label on screen.
+                .tint(sliceColor)
             }
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onChange(of: model.period) { model.load() }
+        .onChange(of: model.schedule.saved) { withAnimation(.easeInOut(duration: 0.15)) { model.load() } }
+    }
+
+    /// "today", or "of Work today".
+    private var caption: String {
+        switch model.slice {
+        case .all: model.period.phrase
+        case .label(nil): "unscheduled \(model.period.phrase)"
+        case .label(let id?):
+            "of \(model.schedule.saved.labels.first { $0.id == id }?.title ?? "") \(model.period.phrase)"
+        }
+    }
+
+    private var sliceColor: Color? {
+        switch model.slice {
+        case .all: nil
+        case .label(nil): .gray
+        case .label(let id?): model.schedule.saved.labels.first { $0.id == id }?.color.color
+        }
+    }
+}
+
+/// The period's time split by label: a bar with each label's share in its color, and a chip per label, plus
+/// Unscheduled, to show only its apps. Clicking the chip on screen goes back to all of them.
+private struct LabelStrip: View {
+    @Bindable var model: ReportModel
+
+    private struct Part: Identifiable {
+        let id: UUID?
+        let title: String
+        let color: Color
+        let seconds: Int
+    }
+
+    private var parts: [Part] {
+        model.schedule.saved.labels.map {
+            Part(id: $0.id, title: $0.title, color: $0.color.color, seconds: model.seconds(in: $0.id))
+        } + [Part(id: nil, title: "Unscheduled", color: .gray.opacity(0.45), seconds: model.seconds(in: nil))]
+    }
+
+    var body: some View {
+        let parts = parts
+        let total = parts.reduce(0) { $0 + $1.seconds }
+        VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { space in
+                HStack(spacing: 2) {
+                    ForEach(parts.filter { $0.seconds > 0 }) { part in
+                        Rectangle()
+                            .fill(part.color)
+                            .frame(
+                                width: max(2, (space.size.width - 2 * CGFloat(parts.count)) * share(part, of: total))
+                            )
+                            .opacity(isDimmed(part) ? 0.3 : 1)
+                            .help(
+                                "\(part.title): \(formatDurationPrecisely(part.seconds)), \(percent(part, of: total))"
+                            )
+                            .onTapGesture { select(part) }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(height: 8)
+            .clipShape(Capsule())
+            .background(Capsule().fill(.quaternary))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(parts) { part in
+                        Chip(
+                            title: part.title,
+                            detail: formatDuration(part.seconds),
+                            color: part.color,
+                            selected: model.slice == .label(part.id)
+                        ) { select(part) }
+                        .help("\(formatDurationPrecisely(part.seconds)), \(percent(part, of: total))")
+                    }
+                }
+                // Room for the selected chip's outline, which the scroll view would otherwise clip.
+                .padding(1)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: model.slice)
+    }
+
+    private func share(_ part: Part, of total: Int) -> Double {
+        total > 0 ? Double(part.seconds) / Double(total) : 0
+    }
+
+    private func percent(_ part: Part, of total: Int) -> String {
+        share(part, of: total).formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    private func isDimmed(_ part: Part) -> Bool {
+        model.slice != .all && model.slice != .label(part.id)
+    }
+
+    private func select(_ part: Part) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            model.slice = model.slice == .label(part.id) ? .all : .label(part.id)
+        }
+    }
+}
+
+private struct Chip: View {
+    let title: String
+    let detail: String
+    let color: Color
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Circle().fill(color).frame(width: 8, height: 8)
+                Text(title).lineLimit(1)
+                Text(detail).foregroundStyle(.secondary).monospacedDigit()
+            }
+            .font(.callout)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(selected ? AnyShapeStyle(color.opacity(0.2)) : AnyShapeStyle(.quinary)))
+            .overlay(Capsule().strokeBorder(selected ? color : .clear, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 

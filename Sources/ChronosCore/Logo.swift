@@ -4,9 +4,12 @@ import Foundation
 /// Chronos's mark: a wristwatch at ten past ten. One drawing for both the app icon and the menu bar icon, so the two
 /// can't drift apart.
 package enum Logo {
-    /// The watch, filling `rect` in `color` on a transparent background. Drawn in a 100 × 100 box with y pointing
-    /// down, like an SVG.
-    package static func drawWatch(in context: CGContext, rect: CGRect, color: CGColor) {
+    /// Ten past ten, in minutes after midnight: the time the mark always shows.
+    package static let tenPastTen = 10 * 60 + 10
+
+    /// The watch, filling `rect` in `color` on a transparent background, its hands at `time` minutes after midnight.
+    /// Drawn in a 100 × 100 box with y pointing down, like an SVG.
+    package static func drawWatch(in context: CGContext, rect: CGRect, color: CGColor, time: Int = tenPastTen) {
         context.saveGState()
         defer { context.restoreGState() }
         let scale = min(rect.width, rect.height) / 100
@@ -38,16 +41,16 @@ package enum Logo {
         )
         context.fillPath()
 
-        // Hands at ten past ten, and the pivot.
+        // Hands, and the pivot. The hour hand turns half a degree a minute, the minute hand six.
         context.setLineCap(.round)
-        hand(context, degrees: -55, length: 10.5, width: 5)
-        hand(context, degrees: 60, length: 15.5, width: 4)
+        hand(context, degrees: Double(time % 720) / 2, length: 10.5, width: 5)
+        hand(context, degrees: Double(time % 60) * 6, length: 15.5, width: 4)
         context.fillEllipse(in: CGRect(x: 46.5, y: 46.5, width: 7, height: 7))
     }
 
     /// The app icon: the watch in white on a black rounded square, on Apple's icon grid, where the square is 824 of
     /// 1024 points, centered.
-    package static func drawAppIcon(in context: CGContext, size: CGFloat) {
+    package static func drawAppIcon(in context: CGContext, size: CGFloat, time: Int = tenPastTen) {
         let inset = size * 100 / 1024
         let square = CGRect(x: inset, y: inset, width: size - 2 * inset, height: size - 2 * inset)
         let radius = square.width * 185.4 / 824
@@ -57,7 +60,8 @@ package enum Logo {
         drawWatch(
             in: context,
             rect: square.insetBy(dx: square.width * 0.07, dy: square.width * 0.07),
-            color: CGColor(gray: 1, alpha: 1)
+            color: CGColor(gray: 1, alpha: 1),
+            time: time
         )
     }
 

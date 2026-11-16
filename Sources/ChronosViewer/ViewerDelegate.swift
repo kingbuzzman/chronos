@@ -4,7 +4,9 @@ import SwiftUI
 /// A regular app with a window and a Dock icon. Closing the window quits it; the recorder in the menu bar keeps
 /// running.
 @MainActor final class ViewerDelegate: NSObject, NSApplicationDelegate {
-    private let model = ReportModel()
+    private let schedule = ScheduleStore()
+    private lazy var model = ReportModel(schedule: schedule)
+    private lazy var settings = SettingsWindow(schedule: schedule)
     private var window: NSWindow?
     private var refreshing: Task<Void, Never>?
 
@@ -49,10 +51,22 @@ import SwiftUI
         refreshing = nil
     }
 
+    @objc private func showSettings() {
+        settings.show(.schedule)
+    }
+
+    @objc private func showAbout() {
+        settings.show(.about)
+    }
+
     /// Without a main menu, Cmd-Q and Cmd-W do nothing.
     private func mainMenu() -> NSMenu {
         let menu = NSMenu()
         let app = NSMenu()
+        app.addItem(withTitle: "About Chronos", action: #selector(showAbout), keyEquivalent: "").target = self
+        app.addItem(.separator())
+        app.addItem(withTitle: "Settings…", action: #selector(showSettings), keyEquivalent: ",").target = self
+        app.addItem(.separator())
         app.addItem(withTitle: "Hide Chronos", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         app.addItem(.separator())
         app.addItem(withTitle: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

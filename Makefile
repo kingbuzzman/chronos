@@ -7,10 +7,15 @@ APP := $(BUILD)/Chronos.app
 # The viewer, nested in the recorder's bundle so the two install, update and sign as one app.
 VIEWER := $(APP)/Contents/Helpers/Chronos.app
 PREFIX ?= $(HOME)/Applications
-# The first Apple Development identity in the keychain, if any: macOS ties Accessibility and Automation to it, so they
-# survive rebuilds. Without one, "-" signs ad hoc, which macOS treats as a new app on every build, and both have to be
-# allowed again after each one. Override with make SIGN_IDENTITY="…".
-SIGN_IDENTITY ?= $(or $(shell security find-identity -v -p codesigning | grep -m1 -o '"Apple Development[^"]*"' | tr -d '"'),-)
+# Every part of the app is signed with this certificate from the keychain, so macOS sees the same app across rebuilds
+# and keeps its Accessibility and Automation permissions. CI builds, or any with CODESIGN_IDENTITY= (empty), are signed
+# ad hoc ("-") instead, which macOS treats as a new app on every build: both permissions have to be allowed again.
+ifeq ($(CI),true)
+CODESIGN_IDENTITY ?=
+else
+CODESIGN_IDENTITY ?= Chronos Local
+endif
+SIGN_IDENTITY := $(or $(CODESIGN_IDENTITY),-)
 SOURCES := Package.swift $(shell find Sources -type f)
 # Drawn by IconMaker from Sources/ChronosCore/Logo.swift, the same code that draws the menu bar icon.
 ICON := $(BUILD)/AppIcon.icns
@@ -31,8 +36,13 @@ all: $(APP) $(FF_XPI)
 
 # All three executables into one bundle, signed inside out: the nested viewer and Firefox helper first, then the
 # recorder around them. install -S replaces each file rather than writing over it, so rebuilding while Chronos runs
-# doesn't crash it.
+# doesn't crash it. A missing certificate fails before the build rather than after it.
 $(APP): $(SOURCES) $(RESOURCES) $(ICON) VERSION Makefile
+	@if [ "$(SIGN_IDENTITY)" != "-" ] && ! security find-identity -p codesigning | grep -q -F -- "$(SIGN_IDENTITY)"; then \
+		echo 'error: no code-signing certificate "$(SIGN_IDENTITY)" in the keychain: create it as README.md says' \
+			'under "Signing", or build signed ad hoc with make CODESIGN_IDENTITY=' >&2; \
+		exit 1; \
+	fi
 	$(STRICT) swift build $(SWIFTPM) -c release
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources $(VIEWER)/Contents/MacOS $(VIEWER)/Contents/Resources
 	install -S -m 644 $(ICON) $(APP)/Contents/Resources/AppIcon.icns

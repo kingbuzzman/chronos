@@ -18,6 +18,12 @@ package enum Paths {
         return folder + "/chronos.sqlite"
     }
 
+    /// The viewer's `Schedule`, next to the database, so trying things out against another database doesn't touch the
+    /// real labels either. The recorder never reads it.
+    package static var schedule: String {
+        URL(fileURLWithPath: database).deletingLastPathComponent().appendingPathComponent("schedule.json").path
+    }
+
     /// The recorder's `InstanceLock`. Always in `folder`, whatever the database: one recorder per user, even when
     /// trying things out against another database.
     package static var lock: String { folder + "/chronos.lock" }

@@ -29,6 +29,9 @@ out plainly: what took the most time, and how much.
 - **In the menu bar:** click the watch to see today's total and the app you've spent the most time in.
 - **In the viewer:** every app you've used, ranked by time, with a bar for each. Open a browser to see its sites,
   or Terminal to see its programs.
+- **By the hours you keep:** in Settings (⌘,), label parts of your week, like Work from 9 to 5 on weekdays. The
+  viewer then splits your time by label, with everything else as Unscheduled, and shows one label's apps at a click.
+  Labels apply to everything already recorded, too.
 
 ---
 
@@ -37,7 +40,8 @@ out plainly: what took the most time, and how much.
 ### What you need
 
 - A Mac running macOS 14 (Sonoma) or later.
-- To build it yourself: Xcode 26 or later, and Node.js to run the Firefox extension's tests.
+- To build it yourself: Xcode 26 or later, Node.js to run the Firefox extension's tests, and a code-signing
+  certificate you create once (see [Signing](#signing)).
 
 ### Get Chronos
 
@@ -107,6 +111,21 @@ Everything is in `~/Library/Application Support/Chronos/chronos.sqlite`. Delete 
 | `make clean` | Deletes everything the build made |
 
 How Chronos works inside, and why, is in [DESIGN.md](DESIGN.md).
+
+#### Local Signing
+
+`make` signs the app with a certificate named `Chronos Local` from your keychain, so macOS keeps its Accessibility
+and Automation permissions across rebuilds. Create it once in Keychain Access:
+
+1. Open Keychain Access. Since macOS 26 it's hidden from Launchpad and Spotlight; open it with
+   `open "/System/Library/CoreServices/Applications/Keychain Access.app"`.
+2. Choose **Keychain Access → Certificate Assistant → Create a Certificate…**
+3. Name it `Chronos Local`, set **Identity Type** to **Self Signed Root** and **Certificate Type** to **Code
+   Signing**, then click **Create**.
+
+The first build asks whether codesign may use the key: enter your login password and choose Always Allow. Use another
+certificate with `CODESIGN_IDENTITY="Apple Development: …"`, or none with `CODESIGN_IDENTITY=`, which signs ad hoc:
+macOS then asks for both permissions again after every build. CI builds are signed ad hoc.
 
 ## License
 

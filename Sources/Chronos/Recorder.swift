@@ -8,7 +8,7 @@ private let log = Logger(subsystem: BundleID.recorder, category: "recorder")
 /// Listens for focus and session changes and feeds them to the tracker. Between events it does nothing at all.
 @MainActor final class Recorder {
     /// Reasons not to record. Recording happens only while there are none.
-    private enum Blocker {
+    private enum Blocker: String {
         case asleep, displayAsleep, locked, screensaver, switchedOut
     }
 
@@ -144,6 +144,7 @@ private let log = Logger(subsystem: BundleID.recorder, category: "recorder")
     private func block(_ blocker: Blocker) {
         let wasRecording = blockers.isEmpty
         blockers.insert(blocker)
+        logBlockers("\(blocker) started")
         guard wasRecording else { return }
         settling?.cancel()
         record { try tracker.stop() }
@@ -151,11 +152,22 @@ private let log = Logger(subsystem: BundleID.recorder, category: "recorder")
 
     private func unblock(_ blocker: Blocker) {
         blockers.remove(blocker)
-        // Waking into a locked screen isn't a return: wait for the unlock.
-        if screenIsLocked() { blockers.insert(.locked) }
+        // Waking into a locked screen isn't a return: wait for the unlock. The unlock itself is taken at its word: the
+        // session can still report the screen locked just after it (suspected after a password unlock left recording
+        // paused for good), and no second unlock would come to clear that.
+        if blocker != .locked, screenIsLocked() { blockers.insert(.locked) }
+        logBlockers("\(blocker) ended")
         guard blockers.isEmpty else { return }
         clock.reanchor()
         focusChanged()
+    }
+
+    /// Every change to what stops recording goes to the system log, so a gap in the data can be traced to its cause:
+    /// log show --predicate 'subsystem == "com.kingbuzzman.chronos"'
+    private func logBlockers(_ change: String) {
+        let state =
+            blockers.isEmpty ? "recording" : "paused by " + blockers.map(\.rawValue).sorted().joined(separator: ", ")
+        log.notice("\(change, privacy: .public): \(state, privacy: .public)")
     }
 
     /// The system clock was changed: close the slot at the old time and start again at the new one.

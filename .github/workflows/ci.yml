@@ -57,7 +57,7 @@ jobs:
       - name: Test
         run: make test
 
-      # No signing identity on the runner, so the Makefile signs ad hoc.
+      # CI is set on the runner, so the Makefile signs ad hoc rather than with a certificate from the keychain.
       - name: Build
         run: make all
 
