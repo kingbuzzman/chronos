@@ -42,13 +42,38 @@ import ChronosCore
         }
         menu.addItem(.separator())
         menu.addItem(action("Open Viewer", #selector(openViewer)))
+        menu.addItem(.separator())
+        let settings = action("Settings…", #selector(openSettings), key: ",")
+        // macOS 27 can add its own icon to an item named like this one.
+        if #available(macOS 27, *) { settings.preferredImageVisibility = .hidden }
+        menu.addItem(settings)
         menu.addItem(action("Quit", #selector(quit), key: "q"))
     }
 
     /// Opens the viewer, or brings its window forward if it's already open.
     @objc private func openViewer() {
+        launchViewer()
+    }
+
+    /// Opens the viewer's Settings: asks a running viewer, or starts one that opens them.
+    @objc private func openSettings() {
+        guard !NSRunningApplication.runningApplications(withBundleIdentifier: BundleID.viewer).isEmpty else {
+            launchViewer(arguments: [ViewerChannel.settingsArgument])
+            return
+        }
+        NSApp.yieldActivation(toApplicationWithBundleIdentifier: BundleID.viewer)
+        DistributedNotificationCenter.default().postNotificationName(
+            ViewerChannel.showSettings,
+            object: nil,
+            userInfo: nil,
+            deliverImmediately: true
+        )
+    }
+
+    private func launchViewer(arguments: [String] = []) {
         let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/Chronos.app")
         let configuration = NSWorkspace.OpenConfiguration()
+        configuration.arguments = arguments
         // Apps opened this way don't inherit the environment, so pass on a database other than the real one.
         if let database = ProcessInfo.processInfo.environment["CHRONOS_DATABASE"] {
             configuration.environment = ["CHRONOS_DATABASE": database]

@@ -83,6 +83,8 @@ import SwiftUI
     func show(_ pane: Pane) {
         tabs.selectedTabViewItemIndex = pane.rawValue
         window.makeKeyAndOrderFront(nil)
+        // Asked for from the menu bar, the viewer may be behind other apps.
+        NSApp.activate()
     }
 }
 

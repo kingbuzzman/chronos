@@ -1,8 +1,15 @@
-import Foundation
+package import Foundation
 
 package enum BundleID {
     package static let recorder = "com.kingbuzzman.chronos"
     package static let viewer = "com.kingbuzzman.chronos.viewer"
+}
+
+/// Recorder → viewer: the menu's items that open a part of the viewer.
+package enum ViewerChannel {
+    /// Show Settings. A viewer that isn't running yet gets `settingsArgument` at launch instead: it would miss this.
+    package static let showSettings = Notification.Name("com.kingbuzzman.chronos.viewer.settings")
+    package static let settingsArgument = "--settings"
 }
 
 package enum Paths {

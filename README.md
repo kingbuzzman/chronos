@@ -29,9 +29,9 @@ out plainly: what took the most time, and how much.
 - **In the menu bar:** click the watch to see today's total and the app you've spent the most time in.
 - **In the viewer:** every app you've used, ranked by time, with a bar for each. Open a browser to see its sites,
   or Terminal to see its programs.
-- **By the hours you keep:** in Settings (⌘,), label parts of your week, like Work from 9 to 5 on weekdays. The
-  viewer then splits your time by label, with everything else as Unscheduled, and shows one label's apps at a click.
-  Labels apply to everything already recorded, too.
+- **By the hours you keep:** in Settings (in the watch's menu, or ⌘, in the viewer), label parts of your week, like
+  Work from 9 to 5 on weekdays. The viewer then splits your time by label, with everything else as Unscheduled, and
+  shows one label's apps at a click. Labels apply to everything already recorded, too.
 
 ---
 

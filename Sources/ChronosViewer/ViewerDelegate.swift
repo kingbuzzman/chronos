@@ -1,4 +1,5 @@
 import AppKit
+import ChronosCore
 import SwiftUI
 
 /// A regular app with a window and a Dock icon. Closing the window quits it; the recorder in the menu bar keeps
@@ -9,6 +10,8 @@ import SwiftUI
     private lazy var settings = SettingsWindow(schedule: schedule)
     private var window: NSWindow?
     private var refreshing: Task<Void, Never>?
+    /// The menu bar's "Settings…", while the viewer is running.
+    private var settingsRequests: (any NSObjectProtocol)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.mainMenu = mainMenu()
@@ -26,6 +29,16 @@ import SwiftUI
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()
         self.window = window
+
+        settingsRequests = DistributedNotificationCenter.default().addObserver(
+            forName: ViewerChannel.showSettings,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.showSettings() }
+        }
+        // Started by the menu bar's "Settings…".
+        if CommandLine.arguments.contains(ViewerChannel.settingsArgument) { showSettings() }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
