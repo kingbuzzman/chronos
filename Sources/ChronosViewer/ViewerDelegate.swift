@@ -65,7 +65,7 @@ import SwiftUI
     }
 
     @objc private func showSettings() {
-        settings.show(.schedule)
+        settings.show(.general)
     }
 
     @objc private func showAbout() {

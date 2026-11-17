@@ -71,15 +71,17 @@ import SwiftUI
 /// The Settings window, one tab per pane, in the toolbar like other Mac apps' settings.
 @MainActor final class SettingsWindow {
     enum Pane: Int {
-        case schedule, allowances, about
+        case general, schedule, allowances, about
     }
 
     private let window: NSWindow
     private let tabs = NSTabViewController()
+    private let login = LoginStore()
 
     init(schedule: ScheduleStore) {
         tabs.tabStyle = .toolbar
         for (title, symbol, view) in [
+            ("General", "gearshape", AnyView(GeneralSettings(login: login))),
             ("Schedule", "calendar", AnyView(ScheduleSettings(store: schedule))),
             ("Allowances", "hourglass", AnyView(AllowanceSettings(store: schedule))),
             ("About", "info.circle", AnyView(AboutView())),

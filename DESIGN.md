@@ -37,7 +37,7 @@ Chronos.app/                          recorder: menu bar icon, events, writes SQ
 - They're built, versioned and signed together, so they can't be mismatched.
 - The database and `schedule.json` are the only data they share. The recorder passes nothing to the viewer except,
   when testing, the database path; the rest are nudges by distributed notification ("show Settings", "the schedule
-  was saved").
+  was saved", and opening at login's question and answer).
 - Focus time on any `com.kingbuzzman.chronos.*` bundle ID is recorded as Chronos.
 - Quitting the recorder quits the viewer.
 - The recorder is a background app in your login session, not a launchd daemon: a daemon can't see the user's windows.
@@ -382,10 +382,22 @@ minutes a day during Work. Going over brings a notification, and that's all.
 
 ### Settings and About
 
-Settings (⌘, or the app menu in the viewer, or "Settings…" in the menu bar) has three panes. **Schedule** edits the
+Settings (⌘, or the app menu in the viewer, or "Settings…" in the menu bar) has four panes, and opens on the first.
+**General** turns opening at login on and off (below). **Schedule** edits the
 labels above, and **Allowances** the allowances. **About** (also "About Chronos") shows the version from the bundle ("Development build" outside one),
 links to the project, this version's release notes and new issues, how much has been recorded since when, and where
 the database is. Its icon's hands show the current time.
+
+### Opening at login
+
+- **The recorder registers itself,** with `SMAppService.mainApp`: only an app can make itself a login item, and the
+  recorder is what should open. Whichever `Chronos.app` is running is the one registered.
+- **The viewer only asks.** General's toggle posts `com.kingbuzzman.chronos.login.set` (on or off) and, when it
+  appears, `com.kingbuzzman.chronos.login.ask`. The recorder answers both with `com.kingbuzzman.chronos.login.status`:
+  `on`, `off` or `needsApproval`, plus the error if registering failed.
+- **No answer in two seconds** means the recorder isn't running; the toggle stays off-limits and says so.
+- **`needsApproval`:** registered, but switched off under System Settings → General → Login Items. The toggle shows
+  on, with a link to that pane.
 
 ## Permissions
 

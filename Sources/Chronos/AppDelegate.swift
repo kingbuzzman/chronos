@@ -6,6 +6,7 @@ import ChronosCore
     private var recorder: Recorder?
     private var statusMenu: StatusMenu?
     private var allowances: AllowanceWatcher?
+    private let loginItem = LoginItem()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {

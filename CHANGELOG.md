@@ -4,6 +4,8 @@ Each release's notes on GitHub come from its section here (see `.github/workflow
 
 ## Unreleased
 
+- Open Chronos at login: a new General pane in Settings turns it on or off. Settings now opens on General.
+
 ## 0.2.0
 
 Settings, for the hours you keep and the time you allow.

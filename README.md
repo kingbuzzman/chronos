@@ -73,7 +73,7 @@ Apple, so the first time you open one, macOS will refuse. Go to **System Setting
      read which site or program is in front.
 3. Use your Mac as usual.
 
-To have Chronos start every time you log in, add it under **System Settings → General → Login Items**.
+To have Chronos start every time you log in, turn on **Open Chronos at login** in Settings → General.
 
 ### See your time
 
