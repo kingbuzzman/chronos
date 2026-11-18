@@ -33,6 +33,18 @@ package enum LoginChannel {
     package static let errorKey = "error"
 }
 
+/// Viewer ↔ recorder: Settings' "Check Connection" for Firefox. The recorder runs the check, since it's the one
+/// chronos-ff's helper talks to, and answers with a `result`; a recorder that isn't running answers nothing.
+package enum FirefoxCheckChannel {
+    /// Viewer → recorder: check every link from chronos-ff to the recorder now.
+    package static let run = Notification.Name("com.kingbuzzman.chronos.ff.check.run")
+    /// Recorder → viewer: whether Firefox's sites are reaching Chronos, as `userInfo[passedKey]`, a Bool, and how each
+    /// link did, one line each, as `userInfo[linesKey]`, a [String].
+    package static let result = Notification.Name("com.kingbuzzman.chronos.ff.check.result")
+    package static let passedKey = "passed"
+    package static let linesKey = "lines"
+}
+
 package enum LoginStatus: String, Sendable {
     case on, off
     /// Registered, but turned off under System Settings → General → Login Items until allowed there.

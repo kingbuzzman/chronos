@@ -4,7 +4,18 @@ Each release's notes on GitHub come from its section here (see `.github/workflow
 
 ## Unreleased
 
+## 0.3.0
+
+Firefox that says when it's lost touch, and Chronos at login.
+
+- If Firefox's sites stop reaching Chronos, a notification says so and what to do. Chronos checks once an hour
+  while Firefox is open, and **Check Connection** in Settings → General checks right away, step by step.
+- The Firefox extension now has a toolbar button: a red **!** while it can't reach Chronos, and a popup showing why,
+  when Chronos last asked, and what it last sent.
 - Open Chronos at login: a new General pane in Settings turns it on or off. Settings now opens on General.
+- Chronos now records how much you type, click, scroll and move the mouse in each app, in 5-minute chunks: counts
+  only, never which key or where. Nothing shows it yet; it's collected for charts to come. It costs one wake-up every
+  5 minutes while recording, and a write only when there was input.
 
 ## 0.2.0
 

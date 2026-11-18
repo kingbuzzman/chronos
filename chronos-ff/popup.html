@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Chronos</title>
+    <style>
+      body {
+        font: menu;
+        width: 22rem;
+        margin: 0.75rem;
+      }
+      h1 {
+        font-size: 1.1em;
+        margin: 0 0 0.5rem;
+      }
+      dl {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 0.25rem 0.75rem;
+        margin: 0 0 0.75rem;
+      }
+      dt {
+        color: GrayText;
+      }
+      dd {
+        margin: 0;
+        overflow-wrap: anywhere;
+      }
+      #hint {
+        margin: 0 0 0.75rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Chronos</h1>
+    <dl id="status"></dl>
+    <p id="hint"></p>
+    <button id="again" type="button">Try again</button>
+    <script src="popup.js"></script>
+  </body>
+</html>

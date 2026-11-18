@@ -166,6 +166,8 @@ struct ReportTests {
         try record(store, site("github.com"), from: at(2026, 10, 19, 9, 30), to: at(2026, 10, 19, 10))
         try record(store, safari, from: at(2026, 10, 19, 10), to: at(2026, 10, 19, 10, 10))
         try store.open(site("github.com"), at: at(2026, 10, 19, 10, 10))
+        try store.addInput(InputCounts(keys: 5), to: site("github.com"), inChunkAt: at(2026, 10, 19, 9, 30))
+        try store.addInput(InputCounts(keys: 5), to: safari, inChunkAt: at(2026, 10, 19, 10))
 
         try Forget.site("github.com", in: chrome.bundleID, store.database)
 
@@ -173,6 +175,7 @@ struct ReportTests {
         #expect(
             try store.slots.map(\.domain) == ["", "example.com", "", "github.com", ""]
         )
+        #expect(try store.input.map(\.domain) == ["", "github.com"])
         let totals = try Report.apps(
             store.database,
             from: at(2026, 10, 19),

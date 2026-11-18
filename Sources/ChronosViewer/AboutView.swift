@@ -7,14 +7,12 @@ import SwiftUI
 struct AboutView: View {
     private static let project = URL(string: "https://github.com/kingbuzzman/chronos")!
     @State private var lifetime: Lifetime?
+    /// When Chronos started; macOS keeps it.
+    @State private var started: Date?
 
     var body: some View {
         VStack(spacing: 14) {
-            // The app icon, but its hands tell the time.
-            TimelineView(.everyMinute) { context in
-                Image(nsImage: Self.icon(at: context.date)).resizable().frame(width: 96, height: 96)
-                    .help(context.date.formatted(date: .omitted, time: .shortened))
-            }
+            Image(nsImage: Self.icon).resizable().frame(width: 96, height: 96)
 
             VStack(spacing: 4) {
                 Text("Chronos").font(.largeTitle.weight(.semibold))
@@ -51,8 +49,17 @@ struct AboutView: View {
 
             Divider().padding(.horizontal, 40)
 
-            if let lifetime, let since = lifetime.since {
-                Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+            Grid(alignment: .leading, horizontalSpacing: 10, verticalSpacing: 4) {
+                if let started {
+                    GridRow {
+                        Text("Running for").foregroundStyle(.secondary).gridColumnAlignment(.trailing)
+                        // Refreshes every second while this page is showing, and not at all otherwise.
+                        TimelineView(.periodic(from: started, by: 1)) { context in
+                            Text(Self.uptime(context.date.timeIntervalSince(started))).monospacedDigit()
+                        }
+                    }
+                }
+                if let lifetime, let since = lifetime.since {
                     stat(
                         "Recording since",
                         Date(timeIntervalSince1970: TimeInterval(since)).formatted(date: .long, time: .omitted)
@@ -65,8 +72,8 @@ struct AboutView: View {
                     stat("Apps seen", lifetime.apps.formatted())
                     stat("Switches", lifetime.switches.formatted())
                 }
-                .font(.callout)
             }
+            .font(.callout)
 
             HStack(spacing: 6) {
                 Text(Paths.database)
@@ -115,15 +122,21 @@ struct AboutView: View {
 
     private func load() {
         lifetime = try? Lifetime.read(Database(path: Paths.database, readOnly: true))
+        started = NSRunningApplication.runningApplications(withBundleIdentifier: BundleID.recorder).first?.launchDate
     }
 
-    private static func icon(at date: Date) -> NSImage {
-        let parts = Calendar.autoupdatingCurrent.dateComponents([.hour, .minute], from: date)
-        let time = (parts.hour ?? 10) * 60 + (parts.minute ?? 10)
-        return NSImage(size: NSSize(width: 256, height: 256), flipped: false) { rect in
-            guard let context = NSGraphicsContext.current?.cgContext else { return false }
-            Logo.drawAppIcon(in: context, size: rect.width, time: time)
-            return true
-        }
+    /// `1:02:03`, and `2d 1:02:03` past a day.
+    private static func uptime(_ interval: TimeInterval) -> String {
+        let seconds = max(0, Int(interval.rounded()))
+        let clock = String(format: "%d:%02d:%02d", seconds / 3600 % 24, seconds / 60 % 60, seconds % 60)
+        let days = seconds / 86400
+        return days > 0 ? "\(days)d \(clock)" : clock
+    }
+
+    /// The app icon, as drawn everywhere else.
+    private static let icon = NSImage(size: NSSize(width: 256, height: 256), flipped: false) { rect in
+        guard let context = NSGraphicsContext.current?.cgContext else { return false }
+        Logo.drawAppIcon(in: context, size: rect.width)
+        return true
     }
 }

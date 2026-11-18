@@ -19,6 +19,8 @@ private let log = Logger(subsystem: BundleID.recorder, category: "recorder")
     let details = Details()
     private var blockers: Set<Blocker> = []
     private var settling: Task<Void, Never>?
+    /// Wakes at each `InputLog.chunk` boundary while a slot is open, to credit the input to what's in front.
+    private var chunks: Task<Void, Never>?
     private var windowChange: Task<Void, Never>?
     /// Whether a window or focus change came in since the last refresh, so Terminal's tab may be another one.
     private var tabMayHaveChanged = false
@@ -28,7 +30,7 @@ private let log = Logger(subsystem: BundleID.recorder, category: "recorder")
 
     init(store: Store) {
         self.store = store
-        tracker = Tracker(store: store, now: { [clock] in clock.now() })
+        tracker = Tracker(store: store, now: { [clock] in clock.now() }, input: readInput)
     }
 
     func start() {
@@ -186,7 +188,34 @@ private let log = Logger(subsystem: BundleID.recorder, category: "recorder")
         } catch {
             log.error("Writing a slot failed: \(error, privacy: .public)")
         }
+        followChunks()
         recorded?(tracker.current)
+    }
+
+    /// Wakes at each chunk boundary while a slot is open, and not at all while none is: asleep, locked and so on. The
+    /// sleep allows `InputLog.slack` of lateness, so macOS can fold it into another wake-up.
+    private func followChunks() {
+        guard tracker.current != nil else {
+            chunks?.cancel()
+            chunks = nil
+            return
+        }
+        guard chunks == nil else { return }
+        chunks = Task { [weak self, clock] in
+            while true {
+                let slack = InputLog.slack(lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled)
+                try? await Task.sleep(
+                    for: .seconds(InputLog.untilNextChunk(after: clock.now())),
+                    tolerance: .seconds(slack)
+                )
+                guard !Task.isCancelled, let self else { return }
+                do {
+                    try tracker.tick()
+                } catch {
+                    log.error("Writing input failed: \(error, privacy: .public)")
+                }
+            }
+        }
     }
 
     private func observe(
@@ -210,6 +239,18 @@ private let log = Logger(subsystem: BundleID.recorder, category: "recorder")
     ) {
         observe(center as NotificationCenter, Notification.Name(name), action)
     }
+}
+
+/// macOS's running input totals since login, of the hardware: software posting events, such as a mouse jiggler,
+/// doesn't count. Counts only, never which key or where, and no permission needed. About 7 µs.
+private func readInput() -> InputCounts {
+    func count(_ type: CGEventType) -> UInt32 { CGEventSource.counterForEventType(.hidSystemState, eventType: type) }
+    return InputCounts(
+        keys: count(.keyDown),
+        clicks: count(.leftMouseDown) &+ count(.rightMouseDown) &+ count(.otherMouseDown),
+        scrolls: count(.scrollWheel),
+        moves: count(.mouseMoved) &+ count(.leftMouseDragged)
+    )
 }
 
 private func screenIsLocked() -> Bool {

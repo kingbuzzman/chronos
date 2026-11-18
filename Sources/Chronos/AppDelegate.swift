@@ -7,6 +7,7 @@ import ChronosCore
     private var statusMenu: StatusMenu?
     private var allowances: AllowanceWatcher?
     private let loginItem = LoginItem()
+    private var firefox: FirefoxCheck?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
@@ -27,9 +28,11 @@ import ChronosCore
             let allowances = AllowanceWatcher(database: store.database)
             recorder.recorded = { allowances.focusChanged($0) }
             recorder.start()
+            let firefox = FirefoxCheck(link: recorder.details.firefox)
             self.recorder = recorder
             self.allowances = allowances
-            statusMenu = StatusMenu(recorder: recorder, allowances: allowances)
+            self.firefox = firefox
+            statusMenu = StatusMenu(recorder: recorder, allowances: allowances, firefox: firefox)
         } catch {
             let alert = NSAlert()
             alert.messageText = "Chronos can't open its database"

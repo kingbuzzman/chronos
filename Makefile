@@ -23,7 +23,7 @@ RESOURCES := $(wildcard Resources/*)
 # chronos-ff, the Firefox extension, and what Firefox needs to find its helper inside the app. Firefox only looks for
 # helpers in FF_HOSTS, outside the project: make ff-register writes the one file there, pointing at a Chronos.app.
 FF := chronos-ff
-FF_SOURCES := $(FF)/manifest.json $(FF)/domain.js $(FF)/background.js
+FF_SOURCES := $(FF)/manifest.json $(FF)/domain.js $(FF)/background.js $(FF)/popup.html $(FF)/popup.js
 FF_XPI := $(BUILD)/chronos-ff-unsigned.xpi
 FF_HOSTS := $(HOME)/Library/Application Support/Mozilla/NativeMessagingHosts
 FF_REGISTRATION := com.kingbuzzman.chronos.json
@@ -35,8 +35,8 @@ UNBUFFERED := script -q /dev/null
 all: $(APP) $(FF_XPI)
 
 # All three executables into one bundle, signed inside out: the nested viewer and Firefox helper first, then the
-# recorder around them. install -S replaces each file rather than writing over it, so rebuilding while Chronos runs
-# doesn't crash it. A missing certificate fails before the build rather than after it.
+# recorder around them. /usr/bin/install -S replaces each file rather than writing over it, so rebuilding while Chronos
+# runs doesn't crash it; the full path, since GNU install (from Homebrew, say) takes -S to mean something else. A missing certificate fails before the build rather than after it.
 $(APP): $(SOURCES) $(RESOURCES) $(ICON) VERSION Makefile
 	@if [ "$(SIGN_IDENTITY)" != "-" ] && ! security find-identity -p codesigning | grep -q -F -- "$(SIGN_IDENTITY)"; then \
 		echo 'error: no code-signing certificate "$(SIGN_IDENTITY)" in the keychain: create it as README.md says' \
@@ -45,15 +45,15 @@ $(APP): $(SOURCES) $(RESOURCES) $(ICON) VERSION Makefile
 	fi
 	$(STRICT) swift build $(SWIFTPM) -c release
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources $(VIEWER)/Contents/MacOS $(VIEWER)/Contents/Resources
-	install -S -m 644 $(ICON) $(APP)/Contents/Resources/AppIcon.icns
-	install -S -m 644 $(ICON) $(VIEWER)/Contents/Resources/AppIcon.icns
-	install -S -m 755 "$$(swift build $(SWIFTPM) -c release --show-bin-path)/Chronos" $(APP)/Contents/MacOS/Chronos
-	install -S -m 755 "$$(swift build $(SWIFTPM) -c release --show-bin-path)/ChronosViewer" \
+	/usr/bin/install -S -m 644 $(ICON) $(APP)/Contents/Resources/AppIcon.icns
+	/usr/bin/install -S -m 644 $(ICON) $(VIEWER)/Contents/Resources/AppIcon.icns
+	/usr/bin/install -S -m 755 "$$(swift build $(SWIFTPM) -c release --show-bin-path)/Chronos" $(APP)/Contents/MacOS/Chronos
+	/usr/bin/install -S -m 755 "$$(swift build $(SWIFTPM) -c release --show-bin-path)/ChronosViewer" \
 		$(VIEWER)/Contents/MacOS/ChronosViewer
-	install -S -m 755 "$$(swift build $(SWIFTPM) -c release --show-bin-path)/chronos-ff-host" \
+	/usr/bin/install -S -m 755 "$$(swift build $(SWIFTPM) -c release --show-bin-path)/chronos-ff-host" \
 		$(APP)/Contents/Helpers/chronos-ff-host
-	install -S -m 644 Resources/Chronos-Info.plist $(APP)/Contents/Info.plist
-	install -S -m 644 Resources/Viewer-Info.plist $(VIEWER)/Contents/Info.plist
+	/usr/bin/install -S -m 644 Resources/Chronos-Info.plist $(APP)/Contents/Info.plist
+	/usr/bin/install -S -m 644 Resources/Viewer-Info.plist $(VIEWER)/Contents/Info.plist
 	plutil -replace CFBundleShortVersionString -string "$(VERSION)" $(APP)/Contents/Info.plist
 	plutil -replace CFBundleShortVersionString -string "$(VERSION)" $(VIEWER)/Contents/Info.plist
 	codesign --force --sign "$(SIGN_IDENTITY)" --options runtime $(VIEWER)
@@ -72,8 +72,8 @@ $(ICON): Sources/ChronosCore/Logo.swift Sources/IconMaker/main.swift
 $(FF_XPI): $(FF_SOURCES) VERSION
 	mkdir -p $(BUILD)/ff
 	sed 's/"version": "[^"]*"/"version": "$(VERSION)"/' $(FF)/manifest.json > $(BUILD)/ff/manifest.json
-	cp $(FF)/domain.js $(FF)/background.js $(BUILD)/ff/
-	cd $(BUILD)/ff && zip -q -X -r ../chronos-ff-unsigned.xpi manifest.json domain.js background.js
+	cp $(FF)/domain.js $(FF)/background.js $(FF)/popup.html $(FF)/popup.js $(BUILD)/ff/
+	cd $(BUILD)/ff && zip -q -X -r ../chronos-ff-unsigned.xpi manifest.json domain.js background.js popup.html popup.js
 
 # Tells Firefox where chronos-ff's helper is: this build's Chronos.app, or another with
 # make ff-register CHRONOS_APP=~/Applications/Chronos.app. Writes the one file outside the project, in FF_HOSTS.

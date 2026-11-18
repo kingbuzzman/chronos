@@ -9,6 +9,15 @@ package enum FirefoxChannel {
     package static let domainReported = Notification.Name("com.kingbuzzman.chronos.ff.domain")
     /// Recorder → host: "what's the current domain?" The extension answers with a `domainReported`.
     package static let ask = Notification.Name("com.kingbuzzman.chronos.ff.ask")
+    /// Recorder → host: "are you there?", for `FirefoxCheck`. Only a running host answers, and Firefox runs it only while
+    /// the extension is connected.
+    package static let ping = Notification.Name("com.kingbuzzman.chronos.ff.ping")
+    /// Host → recorder: the answer to `ping`, with how many of the extension's messages it passed on and threw away
+    /// since it started, in `userInfo["passed"]` and `userInfo["rejected"]`.
+    package static let pong = Notification.Name("com.kingbuzzman.chronos.ff.pong")
+    /// The name Firefox knows the host by, and the extension allowed to start it.
+    package static let host = "com.kingbuzzman.chronos"
+    package static let extensionID = "chronos-ff@kingbuzzman"
     /// Longest domain passed on; anything longer isn't a domain.
     package static let longestDomain = 255
 

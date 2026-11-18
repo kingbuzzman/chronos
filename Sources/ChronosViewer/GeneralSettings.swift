@@ -1,3 +1,4 @@
+import AppKit
 import ChronosCore
 import Foundation
 import Observation
@@ -61,9 +62,65 @@ import SwiftUI
     }
 }
 
-/// Settings for Chronos as a whole: for now, whether it opens at login.
+/// Settings' check of the way from chronos-ff to the recorder, which runs it. See `FirefoxCheckChannel`.
+@MainActor @Observable final class FirefoxCheckStore {
+    enum State: Equatable {
+        case idle, checking
+        case done(passed: Bool, lines: [String])
+        /// The recorder didn't answer: it isn't running, so nothing can be checked.
+        case unreachable
+    }
+
+    private(set) var state = State.idle
+    @ObservationIgnored private var answers: (any NSObjectProtocol)?
+    @ObservationIgnored private var waiting: Task<Void, Never>?
+
+    /// Firefox, its Developer Edition or Nightly is installed; otherwise there's nothing to check.
+    var firefoxIsInstalled: Bool {
+        FirefoxChannel.bundleIDs.contains { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) != nil }
+    }
+
+    init() {
+        answers = DistributedNotificationCenter.default().addObserver(
+            forName: FirefoxCheckChannel.result,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let passed = notification.userInfo?[FirefoxCheckChannel.passedKey] as? Bool ?? false
+            let lines = notification.userInfo?[FirefoxCheckChannel.linesKey] as? [String] ?? []
+            MainActor.assumeIsolated { self?.answered(passed: passed, lines: lines) }
+        }
+    }
+
+    /// Asks the recorder to check. The helper and the extension get 5 seconds to answer, so the recorder gets 10.
+    func check() {
+        state = .checking
+        DistributedNotificationCenter.default().postNotificationName(
+            FirefoxCheckChannel.run,
+            object: nil,
+            userInfo: nil,
+            deliverImmediately: true
+        )
+        waiting?.cancel()
+        waiting = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(10))
+            guard !Task.isCancelled else { return }
+            self?.state = .unreachable
+        }
+    }
+
+    private func answered(passed: Bool, lines: [String]) {
+        // Only answers to this window's question: the recorder's hourly checks don't send any.
+        guard state == .checking else { return }
+        waiting?.cancel()
+        state = .done(passed: passed, lines: lines)
+    }
+}
+
+/// Settings for Chronos as a whole: whether it opens at login, and checking Firefox's connection.
 struct GeneralSettings: View {
     let login: LoginStore
+    let firefox: FirefoxCheckStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -103,10 +160,70 @@ struct GeneralSettings: View {
                 }
             }
 
+            if firefox.firefoxIsInstalled {
+                Divider().padding(.vertical, 4)
+                FirefoxCheckSection(firefox: firefox)
+            }
+
             Spacer(minLength: 0)
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear(perform: login.ask)
+    }
+}
+
+/// Checks that Firefox's sites reach Chronos, and shows how each link did.
+private struct FirefoxCheckSection: View {
+    let firefox: FirefoxCheckStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Firefox connection")
+                Spacer()
+                if firefox.state == .checking {
+                    ProgressView().controlSize(.small)
+                }
+                Button("Check Connection", action: firefox.check)
+                    .disabled(firefox.state == .checking)
+            }
+
+            Text(
+                "Checks every step from chronos-ff, the Firefox extension, to Chronos. Chronos also checks once an hour "
+                    + "while Firefox is open, and sends a notification if something's wrong."
+            )
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            switch firefox.state {
+            case .idle, .checking:
+                EmptyView()
+            case .unreachable:
+                Notice(symbol: "exclamationmark.triangle.fill", color: .orange) {
+                    Text("Chronos isn't running in the menu bar, so it can't be checked.")
+                }
+            case .done(let passed, let lines):
+                VStack(alignment: .leading, spacing: 6) {
+                    if passed {
+                        Notice(symbol: "checkmark.circle.fill", color: .green) {
+                            Text("Firefox's sites are reaching Chronos.")
+                        }
+                    } else {
+                        Notice(symbol: "xmark.octagon.fill", color: .red) {
+                            Text("Firefox's sites aren't reaching Chronos.")
+                        }
+                    }
+                    ForEach(lines, id: \.self) { line in
+                        Text(line)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+        }
     }
 }

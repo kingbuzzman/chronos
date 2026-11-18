@@ -7,7 +7,10 @@ lives in the menu bar, stays dormant between focus changes, and keeps everything
 
 - **Dormant.** No polling and no timers in the steady state. Chronos wakes only when macOS tells it focus or session
   state changed, writes, and goes back to sleep. The exceptions are one-shot: the one-second settle, and, while
-  something with an allowance is in front, a wake-up for the moment it runs out.
+  something with an allowance is in front, a wake-up for the moment it runs out. The one steady timer is the hourly
+  check that chronos-ff still answers, and only while Firefox is running. The other is the input chunk (see "Input"):
+  while a slot is open, one wake-up at each 5-minute mark of the clock, with slack so macOS can fold it into a
+  wake-up it was making anyway.
 - **Local.** One SQLite file on disk. Nothing leaves the Mac.
 - **Never lose data.** The schema is versioned, and migrations back up the old file before touching it.
 - **Never invent time.** When the true end of a slot is unknown, record less time, not more.
@@ -107,6 +110,32 @@ recorder ◀── "github.com" ─────── chronos-ff-host ◀── 
 - **The extension reconnects** every 30 seconds while its channel is closed, so Chronos can still ask after a helper
   dies.
 
+**Checking it works:** a broken link anywhere above is otherwise silent: Firefox's time just becomes "Not identified".
+
+- **Once an hour while Firefox is running** (first 2 minutes after it starts), once `make ff-register` has been run
+  (without it, Firefox was never set up, so there's nothing to check), the recorder checks every link. If
+  Firefox's sites aren't arriving, it sends a notification saying which link is broken and what to do, replacing the
+  last one, and the menu shows a warning line until a check passes. With Firefox closed, nothing is scheduled.
+- **"Check Connection"** in Settings → General (shown only if Firefox is installed) runs the same check at once and
+  shows each link's result. The recorder runs it, since it's the one the helper talks to: the viewer asks with a
+  distributed notification (`com.kingbuzzman.chronos.ff.check.run`) and the recorder answers with the result
+  (`…ff.check.result`). No answer within 10 seconds means the recorder isn't running.
+- **The check:**
+  1. Reads Firefox's registration file: it must exist, be for `com.kingbuzzman.chronos` and `chronos-ff@kingbuzzman`,
+     and point at a helper that can run.
+  2. Pings the helper (`com.kingbuzzman.chronos.ff.ping`). Only a running helper answers (`…ff.pong`), with how many
+     of the extension's messages it passed on and threw away, and Firefox runs it only while the extension is
+     connected.
+  3. Asks the extension for its domain, without forgetting the last one. An answer within 5 seconds passes the check
+     whatever else looks off, so an older helper that doesn't know pings still passes.
+- **The helper says hello** to the extension when it starts, so the extension knows Firefox could start it.
+- **The extension's toolbar button** shows a red "!" while its channel is down. Its popup shows the channel's state,
+  Firefox's error when it closed (such as "No such native application"), when Chronos last asked, the domain last
+  sent, what to do next, and a button to reconnect or send the domain now.
+- **The system log** shows each step, domains redacted:
+  `log stream --predicate 'subsystem == "com.kingbuzzman.chronos"' --level debug`. The helper logs as `ff-host`, the
+  recorder's side as `firefox`. The extension logs to its console (about:debugging → This Firefox → Inspect).
+
 **Installing:** `make ff-register` writes Firefox's registration file, the one file outside the project, to
 `~/Library/Application Support/Mozilla/NativeMessagingHosts/com.kingbuzzman.chronos.json`. It points at this build's
 `Chronos.app`, or another with `CHRONOS_APP=…`. Regular Firefox only keeps extensions Mozilla has signed, so until
@@ -143,7 +172,8 @@ Storing titles or other metadata can be revisited later as a migration.
 
 ## Events
 
-Everything is driven by notifications. The only timer is the one-second blip check below.
+Everything is driven by notifications. The only timers are the one-second blip check below, the 5-minute input chunk
+while a slot is open (see "Input"), and the hourly Firefox check while Firefox is running.
 
 | Event | Source | Action |
 |---|---|---|
@@ -159,12 +189,38 @@ Everything is driven by notifications. The only timer is the one-second blip che
 | System clock changed | `NSSystemClockDidChangeNotification` | Close at the old time, open at the new time |
 | Time zone changed | `NSSystemTimeZoneDidChangeNotification` | Nothing to store; the next midnight cut uses the new zone |
 | Accessibility allowed or revoked | `com.apple.accessibility.api` (distributed) | Re-read what's in front and start watching its windows |
+| A 5-minute mark of the clock, while a row is open | The input chunk timer | Credit the input to what's in front; write the chunk that ended |
 
 Each of these, as it starts or ends, is logged with what's still keeping Chronos from recording, if anything:
 `log show --predicate 'subsystem == "com.kingbuzzman.chronos"'`. A gap in the data can be traced to its cause there.
 
 **Resume** means: once the session is active, unlocked, awake, and the screensaver isn't running, open a row for
 whatever is frontmost. Waking into a locked screen doesn't resume until it's unlocked.
+
+### Input
+
+How much input each app got, in 5-minute chunks of the clock, so a long stretch in one app still shows when there was
+typing and clicking in it, and when there was none. Kept apart from slots: a slot says what was in front, `input` says
+how much was done there. Chronos records the counts only and decides nothing from them, such as whether anyone was
+there; that's for reading.
+
+- **Where it comes from:** macOS keeps running totals since login of key presses, clicks, scrolls and mouse moves
+  (`CGEventSource.counterForEventType`), of the hardware (`.hidSystemState`): events posted by software, such as a
+  mouse jiggler, don't count. Counts only: never which key, never where. No permission is needed, and Chronos never
+  sees the events themselves. A reading takes about 7 µs.
+- **Who gets it:** input goes to whatever's in front, the only thing it can be credited to: keys go there anyway.
+  Chronos reads the totals when focus leaves a target and credits the difference since the last reading to it.
+  Scrolling a background window under the pointer counts toward the app in front.
+- **Chunks:** while a slot is open, one wake-up at each 5-minute mark of the clock (`:00`, `:05`, …) credits the input
+  since the last reading to what's in front and writes the chunk that ended: one row per target that had any, in one
+  transaction. A chunk without input writes nothing, so idle time costs a wake-up and no write. The wake-up allows 10
+  seconds of lateness (60 in Low Power Mode) so macOS can fold it into one it was making anyway; input in that
+  lateness counts toward the chunk before. Asleep, locked and the rest, nothing is scheduled; going to sleep writes
+  the chunk so far, and input while recording is stopped is nobody's.
+- **Units:** keys and clicks are real counts. Scrolls and moves depend on the hardware's event rate (one trackpad swipe
+  with momentum is hundreds of scrolls), so they're for comparing, not units.
+- **Losing it:** quitting, logging out or sleeping writes the chunk so far. A crash or power loss loses the chunk in
+  progress, at most 5 minutes of counts, and never any slot.
 
 ## Database
 
@@ -174,7 +230,7 @@ while the recorder writes.
 ```sql
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
-PRAGMA user_version = 3;
+PRAGMA user_version = 4;
 
 CREATE TABLE apps (
     id        INTEGER PRIMARY KEY,
@@ -199,6 +255,21 @@ CREATE INDEX slots_started_at ON slots(started_at);
 
 -- At most one open row, enforced by SQLite (verified: a second open row fails with UNIQUE constraint failed).
 CREATE UNIQUE INDEX slots_one_open ON slots (ended_at IS NULL) WHERE ended_at IS NULL;
+
+-- Input per 5-minute chunk of the clock, per target in front; no row for a chunk without input. See "Input".
+CREATE TABLE input (
+    id         INTEGER PRIMARY KEY,
+    started_at INTEGER NOT NULL CHECK (started_at % 300 = 0),  -- the chunk's start, unix seconds, UTC
+    app_id     INTEGER NOT NULL REFERENCES apps(id),
+    sub_app_id INTEGER REFERENCES apps(id),   -- as in slots
+    domain     TEXT    NOT NULL DEFAULT '',   -- as in slots; forgetting a site clears it here too
+    keys       INTEGER NOT NULL,              -- key presses
+    clicks     INTEGER NOT NULL,              -- mouse and trackpad clicks, any button
+    scrolls    INTEGER NOT NULL,              -- scroll events
+    moves      INTEGER NOT NULL               -- mouse moves and drags
+);
+
+CREATE INDEX input_started_at ON input(started_at);
 ```
 
 ### Writing
@@ -252,6 +323,17 @@ ORDER BY seconds DESC;
   `'%Y-%m'` (month) or `'%Y'` (year).
 - **Live numbers:** add `unixepoch() - started_at` for the open row.
 - **Switch counts:** `SUM(continued = 0)` doesn't count a midnight carry-over as a switch.
+- **Input over time:** a chunk can have several rows, one per target in front during it (and two for the same target
+  if recording stopped and started again within it), so sum by chunk:
+
+```sql
+-- Monday's input in one app, per 5 minutes
+SELECT datetime(i.started_at, 'unixepoch', 'localtime'), SUM(i.keys), SUM(i.clicks), SUM(i.scrolls), SUM(i.moves)
+FROM input i JOIN apps a ON a.id = i.app_id
+WHERE a.bundle_id = 'com.apple.Terminal' AND i.started_at >= unixepoch('2026-11-16', 'utc')
+  AND i.started_at < unixepoch('2026-11-17', 'utc')
+GROUP BY i.started_at;
+```
 
 ### Migrations
 
@@ -260,13 +342,20 @@ ORDER BY seconds DESC;
   them.
 - Each step runs in one transaction. A failed step rolls back, and the recorder refuses to run against a half-migrated
   file.
-- Steps move all existing data into the new format. A migration never drops data.
+- Steps move all existing data into the new format. A migration never drops data, except a guess Chronos no longer
+  makes; the backup keeps it.
+- A step whose result can be seen in the file (`Schema.alreadyApplied`) is counted rather than run when it's already
+  there. A database whose version is behind its shape, say from being fixed by hand, catches up instead of failing.
 - The viewer refuses to open a database newer than it understands. Shipping both in one bundle makes that unlikely.
 - **Version 2** renamed `slots.domain` to `detail`, when Terminal programs joined browser hosts in it.
 - **Version 3** made each Terminal program an app of its own (`apps.kind = 'program'`), pointed Terminal's slots at it
   with `sub_app_id`, and renamed `detail` back to `domain`, which holds only browser hosts again. "Only one of
   `domain` and `sub_app_id`" is enforced by the recorder, since SQLite can't add a check to an existing table without
   rebuilding it.
+- **Version 4** marked slots `away` and kept per-slot input counts.
+- **Version 5** moved input off slots into `input`, spreading each slot's counts over the 5-minute chunks it overlaps
+  by its time in each, and dropped `away`. Nothing was measured before version 4, so earlier time has no rows:
+  unknown, which isn't the same as no input.
 
 ```sql
 -- Time in claude, whatever it ran in; and Terminal's time, by program
@@ -286,6 +375,7 @@ Clicking the icon shows a menu:
 Today: 6h 42m                 (not clickable)
 Top: Google Chrome — 2h 10m   (not clickable)
 Accessibility not granted     (not clickable; shown only while a permission is missing, Notifications too)
+Firefox's sites aren't …      (not clickable; shown only while the last Firefox check failed)
 ───────────────
 Open Viewer
 ───────────────
@@ -434,7 +524,7 @@ chronos/
 │   ├── ChronosFirefoxHost/  # chronos-ff-host: relays between the Firefox extension and the recorder
 │   └── IconMaker/           # build-time only: renders the app icon from ChronosCore's Logo
 ├── Tests/ChronosCoreTests/
-└── chronos-ff/              # the Firefox extension: manifest, domain.js (+ node tests), background.js
+└── chronos-ff/              # the Firefox extension: manifest, domain.js (+ node tests), background.js, popup
 ```
 
 **Logo:** a wristwatch at ten past ten, white on a black rounded square for the app icon, and the bare watch as a
@@ -465,6 +555,7 @@ terminal, against `build/chronos.sqlite` instead of the real database (`CHRONOS_
 - **Allowances:** sites with subdomains but not lookalikes, apps and programs, time only during a label or outside
   every label, when one runs out across windows, when to notify and remind, and old schedule files without them.
 - **Native messaging framing:** whole, partial and back-to-back messages, and a broken length.
+- **Firefox check:** each way the registration file can be wrong, and which broken link is reported first.
 - **chronos-ff's `domainOf`** (`node --test chronos-ff/*.test.js`, part of `make test`): only the domain, never a path, query
   or password.
 
@@ -488,6 +579,9 @@ database.
 - **Top-level domain grouping:** for the viewer, `github.com` is easy, but `bbc.co.uk` needs a public suffix list.
   Decide when the viewer shows domains.
 - **More metadata,** such as window titles: added through a migration if wanted.
+- **Plotting input:** the viewer shows nothing of `input` yet. The plan: for an app on a day, when it was in front
+  (from `slots`) with its keys, clicks, scrolls and moves per 5 minutes along the same time axis (from `input`), so
+  a long stretch shows where there was typing and clicking and where there was none.
 - **Excluded apps** and **private-window handling:** display decisions, made once there's data.
 - **Signing releases** with a Developer ID, so a downloaded Chronos opens without a warning and keeps its permissions
   across updates.

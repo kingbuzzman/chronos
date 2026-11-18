@@ -77,11 +77,12 @@ import SwiftUI
     private let window: NSWindow
     private let tabs = NSTabViewController()
     private let login = LoginStore()
+    private let firefox = FirefoxCheckStore()
 
     init(schedule: ScheduleStore) {
         tabs.tabStyle = .toolbar
         for (title, symbol, view) in [
-            ("General", "gearshape", AnyView(GeneralSettings(login: login))),
+            ("General", "gearshape", AnyView(GeneralSettings(login: login, firefox: firefox))),
             ("Schedule", "calendar", AnyView(ScheduleSettings(store: schedule))),
             ("Allowances", "hourglass", AnyView(AllowanceSettings(store: schedule))),
             ("About", "info.circle", AnyView(AboutView())),

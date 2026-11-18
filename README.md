@@ -94,6 +94,10 @@ Then in Firefox, go to `about:debugging` → **This Firefox** → **Load Tempora
 `build/chronos-ff.xpi`. Until the extension is signed by Mozilla, Firefox forgets it when it quits, so you'll need to
 load it again after each restart.
 
+If Chronos stops getting sites from Firefox, it checks once an hour while Firefox is open and sends a notification
+saying what's wrong. To check right away, open **Settings…** from the watch, and click **Check Connection** under
+General. The extension's toolbar button shows a red **!** while it can't reach Chronos; click it to see why.
+
 ### Stop it
 
 Click the watch and choose **Quit**. Chronos only records while it's running.

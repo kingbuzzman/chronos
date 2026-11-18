@@ -6,12 +6,14 @@ import ChronosCore
 @MainActor final class StatusMenu: NSObject, NSMenuDelegate {
     private let recorder: Recorder
     private let allowances: AllowanceWatcher
+    private let firefox: FirefoxCheck
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let menu = NSMenu()
 
-    init(recorder: Recorder, allowances: AllowanceWatcher) {
+    init(recorder: Recorder, allowances: AllowanceWatcher, firefox: FirefoxCheck) {
         self.recorder = recorder
         self.allowances = allowances
+        self.firefox = firefox
         super.init()
         // A template image: macOS tints it for light and dark menu bars.
         let icon = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
@@ -44,6 +46,14 @@ import ChronosCore
         }
         if allowances.hasAllowances, allowances.notificationsDenied {
             menu.addItem(info("⚠︎ Notifications not allowed: you won't hear when an allowance runs out"))
+        }
+        if let problem = firefox.problem {
+            menu.addItem(
+                info(
+                    "⚠︎ Firefox's sites aren't reaching Chronos",
+                    hover: FirefoxHealth.describe(problem) + " To check again, open Settings → General."
+                )
+            )
         }
         // Noticed next time, if turned off in System Settings since.
         allowances.refreshPermission()

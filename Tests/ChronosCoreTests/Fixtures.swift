@@ -56,6 +56,59 @@ extension Store {
     }
 }
 
+/// A row of `input`: a chunk's input while one target was in front.
+struct InputRow: Equatable {
+    let start: Int
+    let bundleID: String
+    let domain: String
+    let keys: Int
+    let clicks: Int
+
+    init(_ start: Int, _ target: Target, keys: Int, clicks: Int = 0) {
+        self.start = start
+        bundleID = target.bundleID
+        domain = target.domain
+        self.keys = keys
+        self.clicks = clicks
+    }
+
+    init(start: Int, bundleID: String, domain: String, keys: Int, clicks: Int) {
+        self.start = start
+        self.bundleID = bundleID
+        self.domain = domain
+        self.keys = keys
+        self.clicks = clicks
+    }
+}
+
+extension Store {
+    var input: [InputRow] {
+        get throws {
+            try database.rows(
+                """
+                SELECT i.started_at, a.bundle_id, i.domain, i.keys, i.clicks
+                FROM input i JOIN apps a ON a.id = i.app_id ORDER BY i.id
+                """
+            ) {
+                InputRow(start: $0.int(0), bundleID: $0.text(1), domain: $0.text(2), keys: $0.int(3), clicks: $0.int(4))
+            }
+        }
+    }
+}
+
+/// Running input totals the tests add to by hand.
+final class FakeInput {
+    var counts = InputCounts()
+
+    func type(_ keys: UInt32) {
+        counts.keys &+= keys
+    }
+
+    func click(_ clicks: UInt32) {
+        counts.clicks &+= clicks
+    }
+}
+
 /// A clock the tests move by hand.
 final class FakeClock {
     var time: Double

@@ -1,10 +1,11 @@
-# Lints and tests every push and pull request. When everything passes, builds Chronos.app and the Firefox extension
-# and keeps them as a downloadable artifact for two days.
+# Lints and tests every push to any branch, and every pull request. When everything passes, builds Chronos.app and the
+# Firefox extension and keeps them as a downloadable artifact for two days. Only a push to master can release.
 name: CI
 
 on:
   push:
-    branches: [master]
+    # Every branch, but not tags: the release creates its own.
+    branches: ['**']
   pull_request:
   workflow_dispatch:
 
@@ -12,17 +13,18 @@ on:
 permissions:
   contents: read
 
-# A newer push cancels the run still going for the older one. The release workflow has its own
-# concurrency with cancel-in-progress: false, so once release starts it won't be interrupted.
+# On a branch, a newer push cancels the run still going for the older one. Not on master: cancelling a run cancels the
+# release it's making with it, so master's runs queue instead.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
-  build:
+  verify:
     # The image with the newest Xcode, so CI builds with the compiler and SDK a Mac kept up to date does: warnings fail
     # the build, and a newer compiler warns about things an older one doesn't, and the other way around. A preview image
     # for now; the app still runs on macOS 14.
+    name: Lint, test and package
     runs-on: xcode-27
     timeout-minutes: 30
     outputs:
@@ -66,7 +68,7 @@ jobs:
         run: make test
 
       # CI is set on the runner, so the Makefile signs ad hoc rather than with a certificate from the keychain.
-      - name: Build
+      - name: Make the app and extension
         run: make all
 
       # upload-artifact drops file permissions and symlinks, which breaks an app bundle, so it's zipped with ditto
@@ -89,13 +91,15 @@ jobs:
           retention-days: 2
           if-no-files-found: error
 
-  # Starts only once the build above passes, and only for a version with no release yet.
+  # Starts only once the job above passes, only on a push to master, and only for a version with no release yet.
   release:
-    needs: build
-    if: needs.build.outputs.new-version == 'true'
+    needs: verify
+    if: >-
+      github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+      && needs.verify.outputs.new-version == 'true'
     permissions:
       contents: write # to create the release and its tag
     secrets:
       AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
       AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
-    uses: $/.github/workflows/release.yml
+    uses: ./.github/workflows/release.yml

@@ -86,6 +86,26 @@ package final class Store {
         }
     }
 
+    /// Adds a row of input to `input`: what came in while the target was in front, in the chunk starting at `start`.
+    package func addInput(_ input: InputCounts, to target: Target, inChunkAt start: Int) throws {
+        guard target.domain.isEmpty || target.program == nil else {
+            throw StoreError(description: "\(target.name) has both a domain and a program")
+        }
+        let app = try appID(bundleID: target.bundleID, name: target.name, kind: "app")
+        let program = try target.program.map { try appID(bundleID: $0, name: $0, kind: "program") }
+        try database.run(
+            """
+            INSERT INTO input (started_at, app_id, sub_app_id, domain, keys, clicks, scrolls, moves)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            """,
+            [
+                .integer(start), .integer(app), program.map { .integer($0) } ?? .null, .text(target.domain),
+                .integer(Int(input.keys)), .integer(Int(input.clicks)), .integer(Int(input.scrolls)),
+                .integer(Int(input.moves)),
+            ]
+        )
+    }
+
     /// Closes a slot left open by a crash the crash handler couldn't record. Its real end is unknown, so it gets one
     /// second rather than any invented time.
     package func recover() throws {
